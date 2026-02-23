@@ -1,0 +1,199 @@
+package com.asg.settings.controller;
+
+import com.asg.common.lib.annotation.AllowedAction;
+import com.asg.common.lib.enums.UserRolesRightsEnum;
+import com.asg.common.lib.security.util.UserContext;
+import com.asg.settings.dto.BulkUpdateResponseDTO;
+import com.asg.settings.dto.GlobalParameterResponse;
+import com.asg.settings.dto.UpdateParameterRequestDTO;
+import com.asg.settings.service.ParameterService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.asg.common.lib.dto.response.ApiResponse.error;
+import static com.asg.common.lib.dto.response.ApiResponse.success;
+
+
+@RestController
+@RequestMapping("/v1/global-parameters")
+
+public class ParameterController {
+
+    @Autowired
+    private ParameterService parameterService;
+
+    @AllowedAction(UserRolesRightsEnum.VIEW)
+    @Operation(
+            summary = "Get List Of User Parameters",
+            description = """
+                        Fetch List of **USER** type parameters..
+                        And Filter applied on parameterName,parameterKeyIdType,parameterValue and parameterDetails.
+                         ### API Behavior:
+                           - `userParameters` → All USER type parameters
+                    """
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully Fetched SYSTEM Type parameters"),
+            @ApiResponse(responseCode = "400", description = "Bad Request"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @GetMapping("/user")
+    public ResponseEntity<?> getUserParameters(
+            @RequestParam(required = false) String filter,
+            @ParameterObject Pageable pageable
+    ) {
+        GlobalParameterResponse response = parameterService.getUserParameters(filter, pageable);
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("globalParameters", response.getGlobalParameters());
+        responseData.put("privileged", response.getPrivileged());
+        responseData.put("page", pageable.getPageNumber());
+        responseData.put("size", pageable.getPageSize());
+        responseData.put("totalElements", response.getTotalElements());
+
+        return success("User parameters fetched successfully", responseData);
+    }
+
+    @AllowedAction(UserRolesRightsEnum.VIEW)
+    @Operation(
+            summary = "Get List Of System Parameters",
+            description = """
+                        Fetch List of **SYSTEM** type parameters..
+                        And Filter applied on parameterName,parameterKeyIdType,parameterValue and parameterDetails.
+                         ### API Behavior:
+                             - `systemParameters` → All SYSTEM type parameters
+                    """
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully Fetched SYSTEM Type parameters"),
+            @ApiResponse(responseCode = "400", description = "Bad Request"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @GetMapping("/system")
+    public ResponseEntity<?> getSystemParameters(
+            @RequestParam(required = false) String filter,
+            @ParameterObject Pageable pageable
+    ) {
+        GlobalParameterResponse response = parameterService.getSystemParameters(UserContext.getUserPoid(), filter, pageable);
+
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("userPoid", UserContext.getUserPoid());
+        responseData.put("globalParameters", response.getGlobalParameters());
+        responseData.put("privileged", response.getPrivileged());
+        responseData.put("page", pageable.getPageNumber());
+        responseData.put("size", pageable.getPageSize());
+        responseData.put("totalElements", response.getTotalElements());
+
+        return success("System parameters fetched successfully", responseData);
+    }
+
+    @AllowedAction(UserRolesRightsEnum.EDIT)
+    @Operation(
+            summary = "Update Parameters",
+            description = "Updating existing parameters. This endpoint allows you to update parameter details in bulk. The `parameterPoid` is required to identify the parameter to be updated. The updated details are provided in the request body. The response indicates the success or failure of the update operation."
+    )
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(
+            required = true,
+            description = """
+                    ### Request Body
+                        Update the parameters by providing the required details.
+                        - **loginUserPoid:** ID of the user updating the parameters. Required.
+                        - **parameters:** Parameters to update. This field is mandatory.
+
+                    ### Action Types
+                        - Each parameter can include an **actionType** field controlling how it is processed.
+                        - Supported values: `isUpdated`, `noChange`.
+                        - If `actionType` is omitted or blank, it is treated as `isUpdated` for backward compatibility.
+                        - Currently, `isCreated` and `isDeleted` are not supported for global parameters and will be returned as failed in the response.
+
+                    ### Notes
+                        - All fields are required for successful parameters update.
+
+                    """,
+            content = @Content(
+                    examples = {
+                            @ExampleObject(
+                                    name = "Update Parameters Example",
+                                    value = """
+                                            {
+                                                "loginUserPoid": 3371,
+                                                "parameters": [
+                                                    {
+                                                        "parameterPoid": 55717,
+                                                        "parameterKeyId": "70",
+                                                        "parameterValue": "\\\\\\\\10.100.100.159\\\\erp_reports\\\\Reports\\\\9_updated\\\\",
+                                                        "actionType": "isUpdated"
+                                                    },
+                                                    {
+                                                        "parameterPoid": 55718,
+                                                        "parameterKeyId": "70",
+                                                        "parameterValue": "\\\\\\\\10.100.100.159\\\\erp_reports\\\\Reports\\\\10_updated\\\\",
+                                                        "actionType": "noChange"
+                                                    }
+                                                ]
+                                            }
+                                            """
+                            )
+                    }
+            )
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Successfully updated the parameters"),
+            @ApiResponse(responseCode = "400", description = "Bad Request"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+    })
+    @PutMapping("/bulk-update")
+    public ResponseEntity<?> updateParameters(
+            @Valid @RequestBody UpdateParameterRequestDTO updateParameterDTO) {
+
+        BulkUpdateResponseDTO response = parameterService.updateParameters(updateParameterDTO);
+
+        return switch (response.getOverallStatus()) {
+            case "SUCCESS" -> {
+                long count = response.getResults().stream()
+                    .filter(r -> r.getStatus() == com.asg.common.lib.enums.ParameterUpdateStatus.SUCCESS)
+                    .count();
+                String msg = count == 1 ? "1 row updated successfully" : count + " rows updated successfully";
+                yield success(msg, response);
+            }
+            case "PARTIAL_SUCCESS" -> {
+                long count = response.getResults().stream()
+                    .filter(r -> r.getStatus() == com.asg.common.lib.enums.ParameterUpdateStatus.SUCCESS)
+                    .count();
+                yield success(count + " rows updated, some failed", response);
+            }
+            default -> error("Failed to update parameters", 500, response);
+        };
+    }
+
+    @Operation(summary = "Get parameter value by name", description = "Simple endpoint for internal service calls")
+    @GetMapping("/value/{parameterName}")
+    public ResponseEntity<?> getParameterValue(@PathVariable String parameterName) {
+        String value = parameterService.getParameterValue(parameterName);
+        return success("Parameter value fetched", value);
+    }
+
+    @GetMapping("/value-decimal/{parameterType}/{parameterName}")
+    public ResponseEntity<?> getParameterValueAsDecimal(@PathVariable String parameterType, @PathVariable String parameterName) {
+        java.math.BigDecimal value = parameterService.getParameterValueByNameAsDecimal(parameterType, parameterName);
+        return success("Parameter value fetched", value);
+    }
+
+    @GetMapping("/value/{parameterType}/{parameterName}")
+    public ResponseEntity<?> getParameterValueByType(@PathVariable String parameterType, @PathVariable String parameterName) {
+        Integer value = parameterService.getParameterValueByName(parameterType, parameterName);
+        return success("Parameter value fetched", value);
+    }
+}
